@@ -1,12 +1,10 @@
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 
 namespace TodoApi.Models
 {
-
     public class TodoItem
     {
-        [Key]
+        [Key]        
         public int Id { get; set; }
 
         [Required]
@@ -15,20 +13,18 @@ namespace TodoApi.Models
 
         [MaxLength(1000)]
         public string Description { get; set; }
+]
+        public TodoStatus Status { get; set; } = TodoStatus.Pendiente;
 
-        public bool isCompleted { get; set; } = false;
-
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? CompletedAt { get; set; }
+
+        public DateTime? DueDate { get; set; }
 
         public int? CategoryId { get; set; }
         public Category? Category { get; set; }
 
-        
-        [JsonIgnore]
-        public string UserId { get; set; } = string.Empty;
-
+        public string? UserId { get; set; }
     }
-
 }
