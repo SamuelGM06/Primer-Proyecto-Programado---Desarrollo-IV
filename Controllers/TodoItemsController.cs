@@ -1,4 +1,5 @@
 using System.Dynamic;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -21,10 +22,14 @@ namespace TodoApi.Controllers
             _context = context;
         }
 
+        private string? CurrentUserID => User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         [HttpGet]
         public async Task<ActionResult<TodoItem>> getAllItems([FromQuery] bool? completed, [FromQuery] int? categoryId)
         {
-            var query =  _context.TodoItems.Include(t => t.Category).AsQueryable();
+            var userId = CurrentUserID;
+            //solo trae los todoitems que tengan el mismo user id del token
+            var query =  _context.TodoItems.Include(t => t.Category).Where(t => t.UserId == userId).AsQueryable();
 
             if (completed.HasValue)
             {
@@ -58,6 +63,12 @@ namespace TodoApi.Controllers
         [HttpPost]
         public async Task<ActionResult<TodoItem>> CreateTodoItem(TodoItem todoItem)
         {
+            var userId = CurrentUserID;
+
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
 
             if (todoItem.CategoryId.HasValue)
             {
@@ -68,6 +79,10 @@ namespace TodoApi.Controllers
                     return BadRequest();
                 }
             }
+
+            todoItem.Id = 0;
+
+            todoItem.UserId = userId;
             
             _context.TodoItems.Add(todoItem);
 
