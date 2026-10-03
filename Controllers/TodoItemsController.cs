@@ -95,6 +95,14 @@ namespace TodoApi.Controllers
         [HttpPut("{id:int}")]
         public async Task<ActionResult> UpdateTodoItem(int id, TodoItem updated)
         {
+
+            var userId = CurrentUserID;
+
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
+
             var todoItem = await _context.TodoItems.FindAsync(id);
 
             if(todoItem == null) return NotFound();
@@ -123,6 +131,14 @@ namespace TodoApi.Controllers
         [HttpPatch("{id:int}/toggle")]
         public async Task<ActionResult<TodoItem>> ToggleTodoItem(int id)
         {
+
+            var userId = CurrentUserID;
+
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
+
             var todoItem = _context.TodoItems.Find(id);
 
             if(todoItem == null) return NotFound();
@@ -138,6 +154,15 @@ namespace TodoApi.Controllers
         [HttpDelete("{id:int}")]
         public async Task<ActionResult<TodoItem>> DeleteTodoItem(int id)
         {
+
+            
+            var userId = CurrentUserID;
+
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
+
             var todoItem = _context.TodoItems.Find(id);
 
             if(todoItem == null) return NotFound();
