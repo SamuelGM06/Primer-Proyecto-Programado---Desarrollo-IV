@@ -47,10 +47,16 @@ namespace TodoApi.Controllers
         }
 
         [HttpGet("{id:int}")]
-
-
         public async Task<ActionResult<TodoItem>> GetTodoItem(int id)
         {
+
+            var userId = CurrentUserID;
+
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
+
             var todoItem = await _context.TodoItems
             .Include(t => t.Category)
             .FirstOrDefaultAsync(t => t.Id == id);
