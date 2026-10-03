@@ -12,7 +12,7 @@ builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<TodoDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("HostingConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("PrimerProyectoConnection")));
 
 builder.Services.AddIdentityCore<IdentityUser>()
     .AddEntityFrameworkStores<TodoDbContext>();
