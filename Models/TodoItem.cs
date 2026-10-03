@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace TodoApi.Models
 {
@@ -25,6 +26,7 @@ namespace TodoApi.Models
         public int? CategoryId { get; set; }
         public Category? Category { get; set; }
 
-        public string? UserId { get; set; }
+        [JsonIgnore]
+        public string UserId { get; set; } = string.Empty;
     }
 }
