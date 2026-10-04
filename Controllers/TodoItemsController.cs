@@ -59,7 +59,7 @@ namespace TodoApi.Controllers
 
             var todoItem = await _context.TodoItems
             .Include(t => t.Category)
-            .FirstOrDefaultAsync(t => t.Id == id);
+            .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
 
             if(todoItem == null) return NotFound();
 
@@ -109,7 +109,7 @@ namespace TodoApi.Controllers
                 return Unauthorized();
             }
 
-            var todoItem = await _context.TodoItems.FindAsync(id);
+            var todoItem = await _context.TodoItems.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
 
             if(todoItem == null) return NotFound();
 
@@ -144,10 +144,15 @@ namespace TodoApi.Controllers
             {
                 return Unauthorized();
             }
-
+   
             var todoItem = _context.TodoItems.Find(id);
 
             if(todoItem == null) return NotFound();
+
+            if (userId != todoItem.UserId)
+            {
+                return NotFound();
+            }
 
             todoItem.isCompleted = !todoItem.isCompleted;
             todoItem.CompletedAt = todoItem.isCompleted ? DateTime.Now : null;
@@ -172,6 +177,11 @@ namespace TodoApi.Controllers
             var todoItem = _context.TodoItems.Find(id);
 
             if(todoItem == null) return NotFound();
+
+            if (userId != todoItem.UserId)
+            {
+                return NotFound();
+            }
 
             _context.TodoItems.Remove(todoItem);
 
