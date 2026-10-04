@@ -66,6 +66,51 @@ namespace TodoApi.Controllers
             return Ok(todoItem);
         }
 
+        [HttpGet("stats")]
+        public async Task<ActionResult> GetStats()
+        {
+            var userId = CurrentUserID;
+            if (userId == null) return Unauthorized();
+
+            
+            var tasks = _context.TodoItems.Where(t => t.UserId == userId);
+
+            var total = await tasks.CountAsync();
+
+            
+            var byStatus = await tasks
+                .GroupBy(t => t.isCompleted)
+                .Select(g => new { IsCompleted = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            
+            var now = DateTime.Now;
+            var overdue = await tasks.CountAsync(t =>
+                !t.isCompleted && t.DueDate != null && t.DueDate < now);
+
+           
+            var completedDates = await tasks
+                .Where(t => t.isCompleted && t.CompletedAt != null)
+                .Select(t => new { t.CreatedAt, CompletedAt = t.CompletedAt!.Value })
+                .ToListAsync();
+
+            double? averageDays = completedDates.Count == 0
+                ? null
+                : Math.Round(completedDates.Average(t => (t.CompletedAt - t.CreatedAt).TotalDays), 2);
+
+            return Ok(new
+            {
+                total,
+                byStatus = new
+                {
+                    completed = byStatus.FirstOrDefault(x => x.IsCompleted)?.Count ?? 0,
+                    pending = byStatus.FirstOrDefault(x => !x.IsCompleted)?.Count ?? 0
+                },
+                overdue,
+                averageCompletionDays = averageDays
+            });
+        }
+
         [HttpPost]
         public async Task<ActionResult<TodoItem>> CreateTodoItem(TodoItem todoItem)
         {
