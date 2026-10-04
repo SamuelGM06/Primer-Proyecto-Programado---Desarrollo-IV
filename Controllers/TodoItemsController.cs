@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TodoApi.Data;
 using TodoApi.Models;
+using TodoApi.Services;
 
 namespace TodoApi.Controllers
 {
@@ -111,6 +112,15 @@ namespace TodoApi.Controllers
                 overdue,
                 averageCompletionDays = averageDays
             });
+        }
+        [HttpPost("notificarvencidas")]
+        public async Task<IActionResult> NotifyOverdue([FromServices] OverdueTaskService service)
+        {
+            var userId = CurrentUserID;
+            if (userId == null) return Unauthorized();
+
+            var count = await service.NotifyOverdueAsync(userId);
+            return Ok(new { notified = count });
         }
 
         [HttpPost]
