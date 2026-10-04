@@ -28,5 +28,8 @@ namespace TodoApi.Models
 
         [JsonIgnore]
         public string UserId { get; set; } = string.Empty;
+
+        [JsonIgnore]
+        public DateTime? NotifiedForDueDate { get; set; }
     }
 }
