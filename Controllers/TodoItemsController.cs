@@ -126,7 +126,7 @@ namespace TodoApi.Controllers
             todoItem.Title = updated.Title;
             todoItem.Description = updated.Description;
             todoItem.isCompleted = updated.isCompleted;
-
+            todoItem.DueDate = updated.DueDate;
             todoItem.CompletedAt = updated.isCompleted ? DateTime.Now : null;
 
             await _context.SaveChangesAsync();
