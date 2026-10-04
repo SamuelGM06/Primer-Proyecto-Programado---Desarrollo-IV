@@ -1,4 +1,3 @@
-using System.Dynamic;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -6,7 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TodoApi.Data;
 using TodoApi.Models;
-
 
 namespace TodoApi.Controllers
 {
@@ -25,15 +23,31 @@ namespace TodoApi.Controllers
         private string? CurrentUserID => User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         [HttpGet]
-        public async Task<ActionResult<TodoItem>> getAllItems([FromQuery] bool? completed, [FromQuery] int? categoryId)
+        public async Task<ActionResult<IEnumerable<TodoItem>>> getAllItems(
+            [FromQuery] TodoStatus? status, 
+            [FromQuery] bool? overdue, 
+            [FromQuery] int? categoryId)
         {
             var userId = CurrentUserID;
-            //solo trae los todoitems que tengan el mismo user id del token
-            var query =  _context.TodoItems.Include(t => t.Category).Where(t => t.UserId == userId).AsQueryable();
+            if (userId == null) return Unauthorized();
 
-            if (completed.HasValue)
+            var query = _context.TodoItems
+                .Include(t => t.Category)
+                .Where(t => t.UserId == userId)
+                .AsQueryable();
+
+            if (status.HasValue)
             {
-                query = query.Where(t => t.isCompleted == completed.Value);
+                query = query.Where(t => t.Status == status.Value);
+            }
+
+            if (overdue.HasValue && overdue.Value)
+            {
+                var now = DateTime.UtcNow;
+                query = query.Where(t => t.DueDate.HasValue 
+                                         && t.DueDate < now 
+                                         && t.Status != TodoStatus.Completada 
+                                         && t.Status != TodoStatus.Cancelada);
             }
 
             if (categoryId.HasValue)
@@ -41,27 +55,20 @@ namespace TodoApi.Controllers
                 query = query.Where(t => t.CategoryId == categoryId.Value);
             }
 
-            
-
-            return Ok(query);
+            return Ok(await query.ToListAsync());
         }
 
         [HttpGet("{id:int}")]
         public async Task<ActionResult<TodoItem>> GetTodoItem(int id)
         {
-
             var userId = CurrentUserID;
-
-            if (userId == null)
-            {
-                return Unauthorized();
-            }
+            if (userId == null) return Unauthorized();
 
             var todoItem = await _context.TodoItems
-            .Include(t => t.Category)
-            .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
+                .Include(t => t.Category)
+                .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
 
-            if(todoItem == null) return NotFound();
+            if (todoItem == null) return NotFound();
 
             return Ok(todoItem);
         }
@@ -72,25 +79,24 @@ namespace TodoApi.Controllers
             var userId = CurrentUserID;
             if (userId == null) return Unauthorized();
 
-            
             var tasks = _context.TodoItems.Where(t => t.UserId == userId);
 
             var total = await tasks.CountAsync();
 
-            
             var byStatus = await tasks
-                .GroupBy(t => t.isCompleted)
-                .Select(g => new { IsCompleted = g.Key, Count = g.Count() })
-                .ToListAsync();
+                .GroupBy(t => t.Status)
+                .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
+                .ToDictionaryAsync(x => x.Status, x => x.Count);
 
-            
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             var overdue = await tasks.CountAsync(t =>
-                !t.isCompleted && t.DueDate != null && t.DueDate < now);
+                t.Status != TodoStatus.Completada && 
+                t.Status != TodoStatus.Cancelada && 
+                t.DueDate != null && 
+                t.DueDate < now);
 
-           
             var completedDates = await tasks
-                .Where(t => t.isCompleted && t.CompletedAt != null)
+                .Where(t => t.Status == TodoStatus.Completada && t.CompletedAt != null)
                 .Select(t => new { t.CreatedAt, CompletedAt = t.CompletedAt!.Value })
                 .ToListAsync();
 
@@ -101,11 +107,7 @@ namespace TodoApi.Controllers
             return Ok(new
             {
                 total,
-                byStatus = new
-                {
-                    completed = byStatus.FirstOrDefault(x => x.IsCompleted)?.Count ?? 0,
-                    pending = byStatus.FirstOrDefault(x => !x.IsCompleted)?.Count ?? 0
-                },
+                byStatus,
                 overdue,
                 averageCompletionDays = averageDays
             });
@@ -115,131 +117,108 @@ namespace TodoApi.Controllers
         public async Task<ActionResult<TodoItem>> CreateTodoItem(TodoItem todoItem)
         {
             var userId = CurrentUserID;
-
-            if (userId == null)
-            {
-                return Unauthorized();
-            }
+            if (userId == null) return Unauthorized();
 
             if (todoItem.CategoryId.HasValue)
             {
                 bool categoriaExiste = await _context.Categories
-                .AnyAsync(c => c.Id == todoItem.CategoryId.Value);
-                if (!categoriaExiste)
-                {
-                    return BadRequest();
-                }
+                    .AnyAsync(c => c.Id == todoItem.CategoryId.Value);
+                if (!categoriaExiste) return BadRequest("La categoría especificada no existe.");
             }
 
             todoItem.Id = 0;
-
             todoItem.UserId = userId;
-            
-            _context.TodoItems.Add(todoItem);
+            todoItem.Status = TodoStatus.Pendiente;
+            todoItem.CreatedAt = DateTime.UtcNow;
 
+            _context.TodoItems.Add(todoItem);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof (GetTodoItem), new {id = todoItem.Id}, todoItem);
-
+            return CreatedAtAction(nameof(GetTodoItem), new { id = todoItem.Id }, todoItem);
         }
 
         [HttpPut("{id:int}")]
         public async Task<ActionResult> UpdateTodoItem(int id, TodoItem updated)
         {
-
             var userId = CurrentUserID;
+            if (userId == null) return Unauthorized();
 
-            if (userId == null)
-            {
-                return Unauthorized();
-            }
+            var todoItem = await _context.TodoItems
+                .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
 
-            var todoItem = await _context.TodoItems.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
+            if (todoItem == null) return NotFound();
 
-            if(todoItem == null) return NotFound();
-
-            if (todoItem.CategoryId.HasValue)
+            if (updated.CategoryId.HasValue)
             {
                 bool categoriaExiste = await _context.Categories
-                .AnyAsync(c => c.Id == todoItem.CategoryId.Value);
-                if (!categoriaExiste)
-                {
-                    return BadRequest();
-                }
+                    .AnyAsync(c => c.Id == updated.CategoryId.Value);
+                if (!categoriaExiste) return BadRequest("La categoría especificada no existe.");
             }
 
             todoItem.Title = updated.Title;
             todoItem.Description = updated.Description;
-            todoItem.isCompleted = updated.isCompleted;
+            todoItem.CategoryId = updated.CategoryId;
             todoItem.DueDate = updated.DueDate;
-            todoItem.CompletedAt = updated.isCompleted ? DateTime.Now : null;
 
             await _context.SaveChangesAsync();
-
             return NoContent();
         }
 
-        [HttpPatch("{id:int}/toggle")]
-        public async Task<ActionResult<TodoItem>> ToggleTodoItem(int id)
+        [HttpPatch("{id:int}/status")]
+        public async Task<ActionResult<TodoItem>> UpdateTodoItemStatus(int id, [FromBody] StatusUpdateDto dto)
         {
-
             var userId = CurrentUserID;
+            if (userId == null) return Unauthorized();
 
-            if (userId == null)
+            var todoItem = await _context.TodoItems
+                .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
+
+            if (todoItem == null) return NotFound();
+
+            bool isValidTransition = (todoItem.Status, dto.Status) switch
             {
-                return Unauthorized();
-            }
-   
-            var todoItem = _context.TodoItems.Find(id);
+                (TodoStatus.Pendiente, TodoStatus.EnProgreso) => true,
+                (TodoStatus.Pendiente, TodoStatus.Cancelada) => true,
+                (TodoStatus.EnProgreso, TodoStatus.Completada) => true,
+                (TodoStatus.EnProgreso, TodoStatus.Cancelada) => true,
+                _ => false
+            };
 
-            if(todoItem == null) return NotFound();
-
-            if (userId != todoItem.UserId)
+            if (!isValidTransition)
             {
-                return NotFound();
+                return BadRequest($"Transición no permitida de '{todoItem.Status}' a '{dto.Status}'.");
             }
 
-            todoItem.isCompleted = !todoItem.isCompleted;
-            todoItem.CompletedAt = todoItem.isCompleted ? DateTime.Now : null;
+            if (dto.Status == TodoStatus.Completada && todoItem.DueDate.HasValue && todoItem.DueDate < DateTime.UtcNow)
+            {
+                if (!dto.Force)
+                {
+                    return BadRequest("La tarea está vencida. Se requiere confirmación explícita para completarla.");
+                }
+            }
+
+            todoItem.Status = dto.Status;
+            todoItem.CompletedAt = dto.Status == TodoStatus.Completada ? DateTime.UtcNow : null;
 
             await _context.SaveChangesAsync();
-
             return Ok(todoItem);
         }
 
         [HttpDelete("{id:int}")]
-        public async Task<ActionResult<TodoItem>> DeleteTodoItem(int id)
+        public async Task<ActionResult> DeleteTodoItem(int id)
         {
-
-            
             var userId = CurrentUserID;
+            if (userId == null) return Unauthorized();
 
-            if (userId == null)
-            {
-                return Unauthorized();
-            }
+            var todoItem = await _context.TodoItems
+                .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
 
-            var todoItem = _context.TodoItems.Find(id);
-
-            if(todoItem == null) return NotFound();
-
-            if (userId != todoItem.UserId)
-            {
-                return NotFound();
-            }
+            if (todoItem == null) return NotFound();
 
             _context.TodoItems.Remove(todoItem);
-
             await _context.SaveChangesAsync();
 
             return NoContent();
         }
-
-
-
-       
-
-
-        
     }
 }
