@@ -5,8 +5,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using TodoApi.Services;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, config) => config
+    .WriteTo.Console()
+    .WriteTo.File("logs/app-.log", rollingInterval: RollingInterval.Day));
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
