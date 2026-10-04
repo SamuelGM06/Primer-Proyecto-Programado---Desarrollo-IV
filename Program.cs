@@ -4,6 +4,7 @@ using TodoApi.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using TodoApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,7 +57,9 @@ builder.Services.AddCors(
     )
 
 );
-
+builder.Services.AddScoped<INotifier, LogNotifier>();
+builder.Services.AddScoped<OverdueTaskService>();
+builder.Services.AddHostedService<OverdueBackgroundService>();
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
