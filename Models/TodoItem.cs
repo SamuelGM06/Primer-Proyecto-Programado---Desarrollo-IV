@@ -29,6 +29,8 @@ namespace TodoApi.Models
         [JsonIgnore]
         public string UserId { get; set; } = string.Empty;
 
+        public DateTime? DueDate { get; set; }
+
     }
 
 }
